@@ -15,7 +15,7 @@ describe("localSplit", () => {
 
   it("strips VO: prefixes from the voiceover", () => {
     const sb = localSplit("VO: Hello world.", "16:9");
-    expect(sb.scenes[0].voiceover.startsWith("VO")).toBe(false);
+    expect((sb.scenes[0].voiceover || "").startsWith("VO")).toBe(false);
   });
 
   it("carries the requested aspect ratio through", () => {

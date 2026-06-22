@@ -5,8 +5,9 @@ import {
   ArrowRight, Lock, Send, Loader2, Download, Play, Wand2, Globe,
 } from "lucide-react";
 import Settings from "./Settings";
+import SignupGate from "./SignupGate";
 import Filmstrip from "./Filmstrip";
-import { api, loadKeys, hasAnyKey } from "@/lib/client";
+import { api, loadKeys, hasAnyKey, loadIdentity, track } from "@/lib/client";
 import { estimateCost, fmtUsd, VIDEO_MODELS, IMAGE_MODELS } from "@/lib/pricing";
 import { VOICE_PRESETS, VOICE_MODELS } from "@/lib/providers/elevenlabs";
 import { assemble } from "@/lib/assemble";
@@ -303,10 +304,20 @@ export default function Studio() {
         onProgress: pushLog,
       });
       setFinalUrl(url);
+      trackAd("video");
       pushLog("done — your ad is ready.");
     } catch (e: any) {
       pushLog(`assemble error: ${e.message}. Tip: assembly needs a Chromium-based browser.`);
     }
+  }
+
+  function trackAd(kind: "video" | "stills") {
+    if (!board) return;
+    const id = loadIdentity();
+    track({
+      type: "ad", kind, email: id?.email, name: id?.name,
+      title: board.title, brand: brand?.name, style: choice.style, scenes: board.scenes.length,
+    });
   }
 
   // One action: generate every asset, then stitch the final cut.
@@ -352,6 +363,7 @@ export default function Studio() {
         out.push({ concept: c, imgs });
       }
       setStills(out);
+      trackAd("stills");
     } catch (e: any) {
       pushLog(`stills error: ${e.message}`);
     } finally {
@@ -363,6 +375,7 @@ export default function Studio() {
 
   return (
     <div className="relative z-10 mx-auto max-w-6xl px-5 py-6">
+      <SignupGate />
       {/* Header */}
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">

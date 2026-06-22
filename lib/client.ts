@@ -39,3 +39,37 @@ export async function api<T>(path: string, body: unknown): Promise<T> {
 export function hasAnyKey(k: ApiKeys) {
   return !!(k.anthropic || k.fal || k.elevenlabs);
 }
+
+const IDENTITY_KEY = "admaker.identity.v1";
+
+export interface Identity {
+  name: string;
+  email: string;
+  company?: string;
+}
+
+export function loadIdentity(): Identity | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(IDENTITY_KEY);
+    return raw ? (JSON.parse(raw) as Identity) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveIdentity(id: Identity) {
+  localStorage.setItem(IDENTITY_KEY, JSON.stringify(id));
+}
+
+// Fire-and-forget analytics; never throws into the UI.
+export function track(payload: Record<string, unknown>) {
+  try {
+    fetch("/api/track", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
