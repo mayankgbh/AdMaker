@@ -256,3 +256,30 @@ export function localSplit(script: string, aspectRatio: AspectRatio): Storyboard
     scenes,
   };
 }
+
+const BRAND_SYSTEM = `You extract a brand profile from a company's website HTML. Return ONLY JSON, no prose, no code fences:
+{"name":string,"what":one concise sentence on what the company does and for whom,"audience":string,"tone":"3-5 adjectives describing the brand voice","colors":{"bg":hex,"text":hex,"accent":hex}}
+
+For colors: use any brand colors you can find in the HTML (inline styles, <style> blocks, theme-color meta, hex codes). The bg should be a deep on-brand background, text a high-contrast readable color, accent the brand's signature color. If you cannot find real colors, infer a tasteful palette that matches the brand's vibe. Always return valid 6-digit hex values.`;
+
+export async function extractBrand(url: string, html: string, key?: string): Promise<any> {
+  if (!key) {
+    return { name: "", what: "", audience: "", tone: "", colors: { bg: "#0E0E0F", text: "#ECE7DA", accent: "#FF5631" }, mock: true };
+  }
+  const trimmed = html.replace(/<script[\s\S]*?<\/script>/gi, "").slice(0, 18000);
+  const res = await fetch(API, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 800,
+      system: BRAND_SYSTEM,
+      messages: [{ role: "user", content: `URL: ${url}\n\nHTML:\n${trimmed}` }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const raw = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+  const m = raw.match(/\{[\s\S]*\}/);
+  return m ? JSON.parse(m[0]) : null;
+}

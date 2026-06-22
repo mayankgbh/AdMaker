@@ -79,3 +79,11 @@ export interface ApiKeys {
   elevenlabs?: string;
   pexels?: string;
 }
+
+export interface BrandProfile {
+  name: string;
+  what: string; // one sentence: what the company does
+  audience: string;
+  tone: string; // 3-5 adjectives
+  colors: { bg: string; text: string; accent: string };
+}

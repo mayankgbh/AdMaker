@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Sparkles, Clapperboard, Wallet, Clapperboard as Produce, Settings as Gear,
-  ArrowRight, Lock, Send, Loader2, Download, Play, Film, Wand2,
+  ArrowRight, Lock, Send, Loader2, Download, Play, Film, Wand2, Globe,
 } from "lucide-react";
 import Settings from "./Settings";
 import Filmstrip from "./Filmstrip";
@@ -10,7 +10,7 @@ import { api, loadKeys, hasAnyKey } from "@/lib/client";
 import { estimateCost, fmtUsd, VIDEO_MODELS, IMAGE_MODELS } from "@/lib/pricing";
 import { VOICE_PRESETS } from "@/lib/providers/elevenlabs";
 import { assemble } from "@/lib/assemble";
-import type { AspectRatio, ChatMessage, ModelChoice, Scene, Storyboard, VideoModelId } from "@/lib/types";
+import type { AspectRatio, BrandProfile, ChatMessage, ModelChoice, Scene, Storyboard, VideoModelId } from "@/lib/types";
 
 type Stage = "ideate" | "storyboard" | "budget" | "produce";
 const STAGES: { id: Stage; label: string; icon: any }[] = [
@@ -30,6 +30,9 @@ export default function Studio() {
   const [thinking, setThinking] = useState(false);
   const [script, setScript] = useState("");
   const [writingScript, setWritingScript] = useState(false);
+  const [brand, setBrand] = useState<BrandProfile | null>(null);
+  const [brandUrl, setBrandUrl] = useState("");
+  const [extractingBrand, setExtractingBrand] = useState(false);
 
   // Storyboard
   const [aspect, setAspect] = useState<AspectRatio>("16:9");
@@ -86,9 +89,10 @@ export default function Studio() {
       { t: new Date().toLocaleTimeString(), scene, kind, label, detail },
     ]);
 
-  async function send() {
-    if (!input.trim() || thinking) return;
-    const next = [...messages, { role: "user" as const, content: input.trim() }];
+  async function send(text?: string) {
+    const content = (text ?? input).trim();
+    if (!content || thinking) return;
+    const next = [...messages, { role: "user" as const, content }];
     setMessages(next);
     setInput("");
     setThinking(true);
@@ -99,6 +103,26 @@ export default function Studio() {
       setMessages([...next, { role: "assistant", content: `Error: ${e.message}` }]);
     } finally {
       setThinking(false);
+    }
+  }
+
+  async function extractBrand() {
+    if (!brandUrl.trim() || extractingBrand) return;
+    setExtractingBrand(true);
+    try {
+      const { brand } = await api<{ brand: BrandProfile & { mock?: boolean } }>("/api/brand", { url: brandUrl.trim() });
+      if (brand && brand.name) {
+        setBrand(brand);
+        send(
+          `We're launching ${brand.name}. ${brand.what} Audience: ${brand.audience}. Brand tone: ${brand.tone}. Write me a provocative, anthem-style 30-second launch ad.`
+        );
+      } else {
+        setMessages((m) => [...m, { role: "assistant", content: "I couldn't read that site. Add your Anthropic key, or just tell me what the company does." }]);
+      }
+    } catch (e: any) {
+      setMessages((m) => [...m, { role: "assistant", content: `Couldn't pull that site: ${e.message}` }]);
+    } finally {
+      setExtractingBrand(false);
     }
   }
 
@@ -272,7 +296,9 @@ export default function Studio() {
     try {
       const url = await assemble({
         board, style: choice.style, sceneMedia: sceneMedia.current, voUrls: voUrls.current,
-        durations: measuredDur.current, musicUrl: musicUrl.current, onProgress: pushLog,
+        durations: measuredDur.current, musicUrl: musicUrl.current,
+        theme: brand ? { ...brand.colors, muted: "#8B8275" } : undefined,
+        onProgress: pushLog,
       });
       setFinalUrl(url);
       pushLog("done — your ad is ready.");
@@ -339,6 +365,34 @@ export default function Studio() {
       {/* ---------------- IDEATE ---------------- */}
       {stage === "ideate" && (
         <div className="grid gap-5 md:grid-cols-[1fr_360px]">
+          <div className="md:col-span-2">
+            <div className="panel flex flex-wrap items-center gap-2 p-3">
+              <Globe className="ml-1 h-4 w-4 shrink-0 text-teal" />
+              <span className="label shrink-0">Brand</span>
+              <input
+                className="input min-w-[180px] flex-1"
+                placeholder="yourcompany.com — I'll learn what you do, your tone, and your colors"
+                value={brandUrl}
+                onChange={(e) => setBrandUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && extractBrand()}
+              />
+              <button className="btn-primary shrink-0" onClick={extractBrand} disabled={extractingBrand || !brandUrl.trim()}>
+                {extractingBrand ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+                Pull brand
+              </button>
+            </div>
+            {brand && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-raise px-3 py-2 text-sm">
+                <span className="font-display text-bone">{brand.name}</span>
+                <span className="text-muted">{brand.tone}</span>
+                <span className="ml-auto flex items-center gap-1.5">
+                  {[brand.colors.bg, brand.colors.text, brand.colors.accent].map((c, i) => (
+                    <span key={i} className="h-4 w-4 rounded-full border border-line" style={{ background: c }} title={c} />
+                  ))}
+                </span>
+              </div>
+            )}
+          </div>
           {!keyed && (
             <div className="md:col-span-2 -mt-1 mb-1 flex items-center gap-2 rounded-lg border border-marker/40 bg-marker/10 px-3 py-2 text-sm text-bone">
               <Wand2 className="h-4 w-4 shrink-0 text-marker" />
@@ -391,7 +445,7 @@ export default function Studio() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && send()}
               />
-              <button className="btn-primary" onClick={send} disabled={thinking}>
+              <button className="btn-primary" onClick={() => send()} disabled={thinking}>
                 <Send className="h-4 w-4" />
               </button>
             </div>

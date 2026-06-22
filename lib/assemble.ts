@@ -2,7 +2,7 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import type { Storyboard } from "./types";
-import { FPS, sceneFrameCount, drawSceneFrame, ensureFonts } from "./motion";
+import { FPS, sceneFrameCount, drawSceneFrame, ensureFonts, type Theme } from "./motion";
 
 let ff: FFmpeg | null = null;
 
@@ -25,6 +25,7 @@ export interface AssembleInput {
   voUrls: Record<string, string | undefined>;
   durations: Record<string, number | undefined>; // VO-driven effective duration per scene
   musicUrl?: string;
+  theme?: Theme;
   onProgress?: (msg: string) => void;
 }
 
@@ -41,7 +42,7 @@ function pngFromCanvas(canvas: HTMLCanvasElement): Promise<Uint8Array> {
 }
 
 export async function assemble(input: AssembleInput): Promise<string> {
-  const { board, style, sceneMedia, voUrls, durations, musicUrl, onProgress } = input;
+  const { board, style, sceneMedia, voUrls, durations, musicUrl, theme, onProgress } = input;
   const log = onProgress ?? (() => {});
   await ensureFonts();
   const ffmpeg = await getFFmpeg(log);
@@ -90,7 +91,7 @@ export async function assemble(input: AssembleInput): Promise<string> {
       // Stock footage background + kinetic text overlay (transparent frames)
       log(`scene ${i + 1}: footage + text`);
       for (let f = 0; f < frames; f++) {
-        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1, overFootage: true });
+        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1, overFootage: true, theme });
         await ffmpeg.writeFile(`t${i}_${String(f).padStart(4, "0")}.png`, await pngFromCanvas(canvas));
       }
       await ffmpeg.exec([
@@ -107,7 +108,7 @@ export async function assemble(input: AssembleInput): Promise<string> {
       // Designed motion (full art-directed background)
       log(`scene ${i + 1}: designed motion`);
       for (let f = 0; f < frames; f++) {
-        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1 });
+        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1, theme });
         await ffmpeg.writeFile(`f${i}_${String(f).padStart(4, "0")}.png`, await pngFromCanvas(canvas));
       }
       await ffmpeg.exec([
