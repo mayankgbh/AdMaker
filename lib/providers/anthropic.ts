@@ -76,17 +76,19 @@ export async function ideate(
   return extractText(await res.json());
 }
 
-const PLAN_SYSTEM = `You convert an approved ad script into a production storyboard as STRICT JSON for a motion-graphics engine. Follow exactly:
+const PLAN_SYSTEM = `You convert an approved ad script into a production storyboard as STRICT JSON for a video engine that pairs real stock footage with kinetic text and a voiceover. Follow exactly:
 
-- Every scene's durationSec is between 2 and 8 (read the [Xs] markers).
-- onScreenText: the SHORT words shown on screen (under ~8 words). Preserve any *asterisks* around the punch word — the renderer highlights them. This drives the visual.
-- voiceover: the spoken VO line for the scene (empty string if "(silence)").
-- visualType: use "designed_card" for every scene by default (the engine renders art-directed kinetic typography). Use "ai_video" ONLY if a scene genuinely needs literal footage, and "screen_rec" only for a product-demo placeholder. When unsure, choose "designed_card".
-- characterRef: null (designed motion needs no character continuity).
-- musicPrompt: one instrumental bed with a clear arc that matches the script's tone.
+- The scenes must tell ONE coherent story start to finish: tension, escalation, then resolution into the brand. Each scene is one clear beat that follows from the last.
+- durationSec between 2 and 8 (read [Xs] markers). This is a hint; the final cut is timed to the voiceover.
+- onScreenText: the SHORT words shown on screen (under ~8 words). Preserve *asterisks* around the punch word.
+- voiceover: the spoken VO line (empty string if "(silence)").
+- footageQuery: 2-4 concrete words naming real b-roll that literally fits the beat, the kind a stock library would have. Good: "empty boardroom", "city traffic night", "hands typing laptop", "team celebrating office". Bad: abstract concepts like "confident decision". Every scene needs one.
+- visualType: "designed_card" for all scenes (the engine overlays text on footage). 
+- characterRef: null.
+- musicPrompt: one instrumental bed with a clear arc matching the script.
 
 Return ONLY the JSON object, no prose, no code fences:
-{"title":string,"logline":string,"aspectRatio":"16:9"|"9:16"|"1:1","characterRef":null,"musicPrompt":string,"scenes":[{"durationSec":number,"visualType":"designed_card"|"ai_video"|"screen_rec","onScreenText":string,"voiceover":string,"videoPrompt":string,"usesCharacterRef":false}]}`;
+{"title":string,"logline":string,"aspectRatio":"16:9"|"9:16"|"1:1","characterRef":null,"musicPrompt":string,"scenes":[{"durationSec":number,"visualType":"designed_card","onScreenText":string,"voiceover":string,"footageQuery":string,"videoPrompt":string,"usesCharacterRef":false}]}`;
 
 export async function planStoryboard(
   script: string,
@@ -187,6 +189,7 @@ export function normalizeBoard(raw: string, aspectRatio: AspectRatio): Storyboar
       ? s.visualType
       : "ai_video",
     videoPrompt: s.videoPrompt ?? "",
+    footageQuery: s.footageQuery ?? "",
     card: s.card,
     voiceover: s.voiceover ?? "",
     onScreenText: s.onScreenText ?? "",

@@ -168,12 +168,23 @@ export function drawSceneFrame(
   total: number,
   w: number,
   h: number,
-  opts: { index: number; count: number; isLast: boolean }
+  opts: { index: number; count: number; isLast: boolean; overFootage?: boolean }
 ) {
   const m = Math.round(w * 0.075);
   const p = frame / Math.max(1, total - 1);
   const gp = (opts.index + p) / opts.count;
-  background(ctx, w, h, gp);
+
+  if (opts.overFootage) {
+    ctx.clearRect(0, 0, w, h);
+    const scrim = ctx.createLinearGradient(0, 0, 0, h);
+    scrim.addColorStop(0, "rgba(8,8,9,0.55)");
+    scrim.addColorStop(0.45, "rgba(8,8,9,0.22)");
+    scrim.addColorStop(1, "rgba(8,8,9,0.78)");
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    background(ctx, w, h, gp);
+  }
   kicker(ctx, `${String(opts.index + 1).padStart(2, "0")} / ${String(opts.count).padStart(2, "0")}`, m);
   progress(ctx, p, w, h, m);
 

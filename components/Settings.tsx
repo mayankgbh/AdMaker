@@ -8,6 +8,7 @@ const FIELDS: { k: keyof ApiKeys; label: string; help: string; url: string }[] =
   { k: "anthropic", label: "Anthropic", help: "Creative director + storyboard", url: "https://console.anthropic.com/settings/keys" },
   { k: "fal", label: "fal.ai", help: "Video + image generation", url: "https://fal.ai/dashboard/keys" },
   { k: "elevenlabs", label: "ElevenLabs", help: "Voiceover + music", url: "https://elevenlabs.io/app/settings/api-keys" },
+  { k: "pexels", label: "Pexels", help: "Stock footage (free key)", url: "https://www.pexels.com/api/new/" },
 ];
 
 export default function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {

@@ -54,10 +54,10 @@ export function estimateCost(board: Storyboard, choice: ModelChoice): CostEstima
   const videoSeconds = aiScenes.reduce((n, s) => n + clampDuration(s.durationSec), 0);
   const vModel = VIDEO_MODELS[choice.videoModel];
 
-  if (choice.style === "designed") {
+  if (choice.style !== "ai_video") {
     lines.push({
-      label: "Designed motion",
-      detail: "art-directed typography, rendered in-browser",
+      label: choice.style === "stock" ? "Stock footage + text" : "Designed motion",
+      detail: choice.style === "stock" ? "free stock clips, kinetic text, in-browser" : "art-directed typography, in-browser",
       usd: 0,
     });
   } else {

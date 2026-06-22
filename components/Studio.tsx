@@ -40,7 +40,7 @@ export default function Studio() {
 
   // Budget / produce
   const [choice, setChoice] = useState<ModelChoice>({
-    style: "designed",
+    style: "stock",
     videoModel: "fal-ai/kling-video/v3/standard/text-to-video",
     imageModel: "fal-ai/flux/dev",
     voiceId: VOICE_PRESETS[0].id,
@@ -55,7 +55,21 @@ export default function Studio() {
   const [finalUrl, setFinalUrl] = useState<string>();
   const sceneMedia = useRef<Record<string, { url: string; mock?: boolean }>>({});
   const voUrls = useRef<Record<string, string>>({});
+  const measuredDur = useRef<Record<string, number>>({});
   const musicUrl = useRef<string>();
+
+  async function audioDuration(dataUrl: string): Promise<number> {
+    try {
+      const buf = await (await fetch(dataUrl)).arrayBuffer();
+      const AC = (window.AudioContext || (window as any).webkitAudioContext);
+      const ac = new AC();
+      const decoded = await ac.decodeAudioData(buf);
+      ac.close();
+      return decoded.duration;
+    } catch {
+      return 0;
+    }
+  }
 
   const keyed = hasAnyKey(loadKeys());
   const pushLog = (s: string) => setLog((l) => [...l.slice(-40), s]);
@@ -138,6 +152,7 @@ export default function Studio() {
     setDebug([]);
     sceneMedia.current = {};
     voUrls.current = {};
+    measuredDur.current = {};
     const supportsRef = VIDEO_MODELS[choice.videoModel].supportsImageRef;
 
     try {
@@ -188,15 +203,40 @@ export default function Studio() {
         addDebug("visuals", "ok", "designed motion — rendered at assembly, no video API cost");
       }
 
-      // 3. Voiceover per scene that has a line (non-fatal per line)
+      // 2b. Stock footage per scene (matched to the script beat)
+      if (choice.style === "stock") {
+        for (const s of board.scenes) {
+          const q = s.footageQuery?.trim() || s.onScreenText || board.title;
+          addDebug(`scene ${s.index + 1}`, "req", `footage · "${q}"`);
+          try {
+            const r = await api<{ url: string | null; mock?: boolean }>("/api/footage", { query: q, aspectRatio: board.aspectRatio });
+            if (r.url) {
+              sceneMedia.current[s.id] = { url: r.url, mock: r.mock };
+              addDebug(`scene ${s.index + 1}`, r.mock ? "err" : "ok", r.mock ? "footage mock (no Pexels key) → designed motion" : "footage matched");
+            } else {
+              addDebug(`scene ${s.index + 1}`, "err", "no footage match → designed motion");
+            }
+          } catch (e: any) {
+            addDebug(`scene ${s.index + 1}`, "err", "footage failed → designed motion", e.message);
+          }
+        }
+      }
+
+      // 3. Voiceover per scene, measuring real duration so the cut locks to voice
       for (const s of board.scenes) {
-        if (!s.voiceover?.trim()) continue;
+        if (!s.voiceover?.trim()) {
+          measuredDur.current[s.id] = s.durationSec;
+          continue;
+        }
         pushLog(`scene ${s.index + 1}: voiceover…`);
         try {
           const r = await api<{ dataUrl: string; mock?: boolean }>("/api/generate/voice", { text: s.voiceover, voiceId: choice.voiceId });
           voUrls.current[s.id] = r.dataUrl;
-          addDebug(`scene ${s.index + 1}`, r.mock ? "err" : "ok", r.mock ? "VO mock (no ElevenLabs key?)" : "VO ok");
+          const d = await audioDuration(r.dataUrl);
+          measuredDur.current[s.id] = d > 0.3 ? Math.round((d + 0.5) * 10) / 10 : s.durationSec;
+          addDebug(`scene ${s.index + 1}`, r.mock ? "err" : "ok", r.mock ? "VO mock (no ElevenLabs key?)" : `VO ok · ${measuredDur.current[s.id]}s`);
         } catch (e: any) {
+          measuredDur.current[s.id] = s.durationSec;
           addDebug(`scene ${s.index + 1}`, "err", "VO failed", e.message);
           pushLog(`scene ${s.index + 1} VO failed: ${e.message}`);
         }
@@ -231,7 +271,7 @@ export default function Studio() {
     try {
       const url = await assemble({
         board, style: choice.style, sceneMedia: sceneMedia.current, voUrls: voUrls.current,
-        musicUrl: musicUrl.current, onProgress: pushLog,
+        durations: measuredDur.current, musicUrl: musicUrl.current, onProgress: pushLog,
       });
       setFinalUrl(url);
       pushLog("done — your ad is ready.");
@@ -523,7 +563,16 @@ export default function Studio() {
           <div className="space-y-4">
             <div className="panel p-4">
               <p className="label mb-3">Visual style</p>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <button
+                  onClick={() => setChoice({ ...choice, style: "stock" })}
+                  className={`rounded-lg border p-3 text-left transition ${
+                    choice.style === "stock" ? "border-marker bg-marker/10" : "border-line hover:border-muted"
+                  }`}
+                >
+                  <span className="font-medium text-bone">Stock + text</span>
+                  <p className="mt-0.5 text-xs text-muted">Real footage matched to each beat, kinetic text on top, cut to the VO. Recommended.</p>
+                </button>
                 <button
                   onClick={() => setChoice({ ...choice, style: "designed" })}
                   className={`rounded-lg border p-3 text-left transition ${
@@ -531,7 +580,7 @@ export default function Studio() {
                   }`}
                 >
                   <span className="font-medium text-bone">Designed motion</span>
-                  <p className="mt-0.5 text-xs text-muted">Art-directed kinetic typography. Coherent, premium, free to render. Recommended.</p>
+                  <p className="mt-0.5 text-xs text-muted">Pure kinetic typography. No footage, $0 to render.</p>
                 </button>
                 <button
                   onClick={() => setChoice({ ...choice, style: "ai_video" })}
@@ -540,9 +589,12 @@ export default function Studio() {
                   }`}
                 >
                   <span className="font-medium text-bone">AI video</span>
-                  <p className="mt-0.5 text-xs text-muted">Generated footage per scene. Higher ceiling, less consistent, costs per second.</p>
+                  <p className="mt-0.5 text-xs text-muted">Generated footage. Higher ceiling, costs per second.</p>
                 </button>
               </div>
+              {choice.style === "stock" && (
+                <p className="mt-3 text-xs text-teal">Needs a free Pexels key in Settings. Scenes with no match fall back to designed motion.</p>
+              )}
             </div>
 
             {choice.style === "ai_video" && (

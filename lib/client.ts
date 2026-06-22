@@ -21,6 +21,7 @@ function keyHeaders(keys: ApiKeys): Record<string, string> {
   if (keys.anthropic) h["x-anthropic-key"] = keys.anthropic;
   if (keys.fal) h["x-fal-key"] = keys.fal;
   if (keys.elevenlabs) h["x-elevenlabs-key"] = keys.elevenlabs;
+  if (keys.pexels) h["x-pexels-key"] = keys.pexels;
   return h;
 }
 

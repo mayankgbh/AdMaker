@@ -7,6 +7,7 @@ export function resolveKeys(req: NextRequest): ApiKeys {
     anthropic: h.get("x-anthropic-key") || process.env.ANTHROPIC_API_KEY || undefined,
     fal: h.get("x-fal-key") || process.env.FAL_KEY || undefined,
     elevenlabs: h.get("x-elevenlabs-key") || process.env.ELEVENLABS_API_KEY || undefined,
+    pexels: h.get("x-pexels-key") || process.env.PEXELS_API_KEY || undefined,
   };
 }
 

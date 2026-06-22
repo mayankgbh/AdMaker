@@ -17,6 +17,7 @@ export interface Scene {
   durationSec: number; // clamped 2..8 — models can't do long clips
   visualType: VisualType;
   videoPrompt?: string; // for ai_video
+  footageQuery?: string; // for stock footage (2-4 words of b-roll)
   card?: CardSpec; // for designed_card
   voiceover?: string; // VO line under this scene (may be empty)
   onScreenText?: string;
@@ -42,7 +43,7 @@ export interface Storyboard {
 }
 
 export interface ModelChoice {
-  style: "designed" | "ai_video";
+  style: "stock" | "designed" | "ai_video";
   videoModel: VideoModelId;
   imageModel: ImageModelId;
   voiceId: string;
@@ -76,4 +77,5 @@ export interface ApiKeys {
   anthropic?: string;
   fal?: string;
   elevenlabs?: string;
+  pexels?: string;
 }

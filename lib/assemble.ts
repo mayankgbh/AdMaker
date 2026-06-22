@@ -20,9 +20,10 @@ async function getFFmpeg(onLog?: (s: string) => void) {
 
 export interface AssembleInput {
   board: Storyboard;
-  style: "designed" | "ai_video";
+  style: "stock" | "designed" | "ai_video";
   sceneMedia: Record<string, { url: string; mock?: boolean } | undefined>;
   voUrls: Record<string, string | undefined>;
+  durations: Record<string, number | undefined>; // VO-driven effective duration per scene
   musicUrl?: string;
   onProgress?: (msg: string) => void;
 }
@@ -33,14 +34,14 @@ const SIZE: Record<string, [number, number]> = {
   "1:1": [1024, 1024],
 };
 
-function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array> {
+function pngFromCanvas(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   return new Promise((res) =>
     canvas.toBlob(async (b) => res(new Uint8Array(await b!.arrayBuffer())), "image/png")
   );
 }
 
 export async function assemble(input: AssembleInput): Promise<string> {
-  const { board, style, sceneMedia, voUrls, musicUrl, onProgress } = input;
+  const { board, style, sceneMedia, voUrls, durations, musicUrl, onProgress } = input;
   const log = onProgress ?? (() => {});
   await ensureFonts();
   const ffmpeg = await getFFmpeg(log);
@@ -51,38 +52,73 @@ export async function assemble(input: AssembleInput): Promise<string> {
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
 
+  // Effective duration per scene — driven by the voiceover so picture locks to voice.
+  const dur = (id: string, fallback: number) =>
+    Math.max(2, Math.min(12, durations[id] ?? fallback));
+
   const segFiles: string[] = [];
 
   for (let i = 0; i < board.scenes.length; i++) {
     const scene = board.scenes[i];
-    const dur = Math.max(2, Math.min(8, scene.durationSec));
+    const d = dur(scene.id, scene.durationSec);
     const seg = `seg${i}.mp4`;
     const media = sceneMedia[scene.id];
-    const useClip = style === "ai_video" && scene.visualType === "ai_video" && media?.url && !media.mock;
+    const frames = Math.max(1, Math.round(d * FPS));
 
-    if (useClip) {
-      log(`scene ${i + 1}: clip`);
-      await ffmpeg.writeFile(`clip${i}`, await fetchFile(media!.url));
+    const hasFootage = style === "stock" && media?.url && !media.mock;
+    const hasClip = style === "ai_video" && scene.visualType === "ai_video" && media?.url && !media.mock;
+
+    let footageOK = false;
+    if (hasFootage || hasClip) {
+      try {
+        await ffmpeg.writeFile(`clip${i}`, await fetchFile(media!.url));
+        footageOK = true;
+      } catch (e) {
+        log(`scene ${i + 1}: footage fetch blocked, using designed motion`);
+      }
+    }
+
+    if (footageOK && hasClip) {
+      // AI video clip, no text overlay
       await ffmpeg.exec([
-        "-i", `clip${i}`, "-t", String(dur),
+        "-stream_loop", "-1", "-i", `clip${i}`,
+        "-t", String(d),
         "-vf", `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS}`,
         "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS), seg,
       ]);
+    } else if (footageOK && hasFootage) {
+      // Stock footage background + kinetic text overlay (transparent frames)
+      log(`scene ${i + 1}: footage + text`);
+      for (let f = 0; f < frames; f++) {
+        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1, overFootage: true });
+        await ffmpeg.writeFile(`t${i}_${String(f).padStart(4, "0")}.png`, await pngFromCanvas(canvas));
+      }
+      await ffmpeg.exec([
+        "-stream_loop", "-1", "-i", `clip${i}`,
+        "-framerate", String(FPS), "-i", `t${i}_%04d.png`,
+        "-filter_complex",
+        `[0:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS}[bg];[bg][1:v]overlay=shortest=0[v]`,
+        "-map", "[v]", "-t", String(d), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS), seg,
+      ]);
+      for (let f = 0; f < frames; f++) {
+        try { await ffmpeg.deleteFile(`t${i}_${String(f).padStart(4, "0")}.png`); } catch {}
+      }
     } else {
-      log(`scene ${i + 1}: rendering motion`);
-      const frames = sceneFrameCount(scene);
+      // Designed motion (full art-directed background)
+      log(`scene ${i + 1}: designed motion`);
       for (let f = 0; f < frames; f++) {
         drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1 });
-        await ffmpeg.writeFile(`f${i}_${String(f).padStart(4, "0")}.png`, await canvasToPng(canvas));
+        await ffmpeg.writeFile(`f${i}_${String(f).padStart(4, "0")}.png`, await pngFromCanvas(canvas));
       }
       await ffmpeg.exec([
         "-framerate", String(FPS), "-i", `f${i}_%04d.png`,
-        "-t", String(dur), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS), seg,
+        "-t", String(d), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS), seg,
       ]);
       for (let f = 0; f < frames; f++) {
         try { await ffmpeg.deleteFile(`f${i}_${String(f).padStart(4, "0")}.png`); } catch {}
       }
     }
+    if (footageOK) { try { await ffmpeg.deleteFile(`clip${i}`); } catch {} }
     segFiles.push(seg);
   }
 
@@ -90,16 +126,20 @@ export async function assemble(input: AssembleInput): Promise<string> {
   await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "video.mp4"]);
   log("stitched");
 
+  // VO: each scene's audio is exactly its effective duration (VO padded with silence),
+  // so the concatenated audio aligns 1:1 with the concatenated video.
   const voList: string[] = [];
   for (let i = 0; i < board.scenes.length; i++) {
     const scene = board.scenes[i];
+    const d = dur(scene.id, scene.durationSec);
     const url = voUrls[scene.id];
     const name = `vo${i}.mp3`;
     if (url && !url.startsWith("data:audio/wav")) {
-      await ffmpeg.writeFile(name, await fetchFile(url));
+      await ffmpeg.writeFile(`raw${i}.mp3`, await fetchFile(url));
+      await ffmpeg.exec(["-i", `raw${i}.mp3`, "-af", "apad", "-t", String(d), "-c:a", "libmp3lame", name]);
     } else {
       await ffmpeg.exec([
-        "-f", "lavfi", "-t", String(scene.durationSec),
+        "-f", "lavfi", "-t", String(d),
         "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
         "-c:a", "libmp3lame", name,
       ]);
@@ -113,7 +153,7 @@ export async function assemble(input: AssembleInput): Promise<string> {
     await ffmpeg.writeFile("music.mp3", await fetchFile(musicUrl));
     await ffmpeg.exec([
       "-i", "video.mp4", "-i", "vo.mp3", "-i", "music.mp3",
-      "-filter_complex", "[2:a]volume=0.28[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=2[a]",
+      "-filter_complex", "[2:a]volume=0.25[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=2[a]",
       "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-shortest", "final.mp4",
     ]);
   } else {
