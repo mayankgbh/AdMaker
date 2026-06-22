@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Sparkles, Clapperboard, Wallet, Clapperboard as Produce, Settings as Gear,
-  ArrowRight, Lock, Send, Loader2, Download, Play, Film, Wand2, Globe,
+  ArrowRight, Lock, Send, Loader2, Download, Play, Wand2, Globe,
 } from "lucide-react";
 import Settings from "./Settings";
 import Filmstrip from "./Filmstrip";
@@ -176,7 +176,6 @@ export default function Studio() {
 
   async function produce() {
     if (!board) return;
-    setProducing(true);
     setFinalUrl(undefined);
     setDebug([]);
     sceneMedia.current = {};
@@ -283,10 +282,37 @@ export default function Studio() {
           pushLog(`music failed (continuing): ${e.message}`);
         }
       }
-      pushLog("all assets ready. assemble when you are.");
+      pushLog("all assets ready, assembling…");
     } catch (e: any) {
       addDebug("run", "err", "produce error", e.message);
       pushLog(`produce error: ${e.message}`);
+    }
+  }
+
+  async function runAssemble() {
+    if (!board) return;
+    pushLog("loading the renderer…");
+    try {
+      const url = await assemble({
+        board, style: choice.style, sceneMedia: sceneMedia.current, voUrls: voUrls.current,
+        durations: measuredDur.current, musicUrl: musicUrl.current,
+        theme: brand ? { ...brand.colors, muted: "#8B8275" } : undefined,
+        onProgress: pushLog,
+      });
+      setFinalUrl(url);
+      pushLog("done — your ad is ready.");
+    } catch (e: any) {
+      pushLog(`assemble error: ${e.message}. Tip: assembly needs a Chromium-based browser.`);
+    }
+  }
+
+  // One action: generate every asset, then stitch the final cut.
+  async function runFull() {
+    if (!board || producing) return;
+    setProducing(true);
+    try {
+      await produce();
+      await runAssemble();
     } finally {
       setProducing(false);
     }
@@ -316,26 +342,6 @@ export default function Studio() {
       pushLog(`stills error: ${e.message}`);
     } finally {
       setStillsLoading(false);
-    }
-  }
-
-  async function runAssemble() {
-    if (!board) return;
-    setProducing(true);
-    pushLog("loading ffmpeg…");
-    try {
-      const url = await assemble({
-        board, style: choice.style, sceneMedia: sceneMedia.current, voUrls: voUrls.current,
-        durations: measuredDur.current, musicUrl: musicUrl.current,
-        theme: brand ? { ...brand.colors, muted: "#8B8275" } : undefined,
-        onProgress: pushLog,
-      });
-      setFinalUrl(url);
-      pushLog("done — your ad is ready.");
-    } catch (e: any) {
-      pushLog(`assemble error: ${e.message}. Tip: assembly needs a Chromium-based browser with cross-origin isolation.`);
-    } finally {
-      setProducing(false);
     }
   }
 
@@ -724,8 +730,8 @@ export default function Studio() {
             </div>
             <p className="mt-2 text-[11px] text-muted">Estimate. Actual depends on provider rates and re-rolls.</p>
             {!keyed && <p className="mt-2 text-[11px] text-teal">No keys yet — this will run as a free mock dry run.</p>}
-            <button className="btn-primary mt-4 w-full" onClick={() => { setStage("produce"); produce(); }} disabled={producing}>
-              <Play className="h-4 w-4" /> Generate everything
+            <button className="btn-primary mt-4 w-full" onClick={() => { setStage("produce"); runFull(); }} disabled={producing}>
+              <Play className="h-4 w-4" /> Make my ad
             </button>
           </aside>
         </div>
@@ -743,16 +749,18 @@ export default function Studio() {
               {finalUrl ? (
                 <video src={finalUrl} controls className="w-full rounded-lg bg-black" />
               ) : (
-                <div className="grid aspect-video place-items-center rounded-lg border border-dashed border-line text-muted">
-                  {producing ? <Loader2 className="h-6 w-6 animate-spin" /> : "Generate, then assemble"}
+                <div className="grid aspect-video place-items-center rounded-lg border border-dashed border-line text-center text-muted">
+                  {producing ? (
+                    <span className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /> Making your ad…</span>
+                  ) : (
+                    "Your finished ad will appear here."
+                  )}
                 </div>
               )}
               <div className="mt-3 flex gap-2">
-                <button className="btn-ghost" onClick={produce} disabled={producing}>
-                  {producing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Re-generate
-                </button>
-                <button className="btn-primary flex-1" onClick={runAssemble} disabled={producing}>
-                  <Film className="h-4 w-4" /> Assemble ad
+                <button className="btn-primary flex-1" onClick={runFull} disabled={producing}>
+                  {producing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  {finalUrl ? "Remake ad" : "Make ad"}
                 </button>
                 {finalUrl && (
                   <a className="btn-ghost" href={finalUrl} download="admaker-ad.mp4">

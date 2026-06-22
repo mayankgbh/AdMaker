@@ -74,3 +74,8 @@ This is a working v1. Honest about the edges:
 ## License
 
 MIT. Fork it, ship it, make ads.
+
+## Roadmap
+
+- **Weekly model watcher** (planned): a scheduled job that checks for newly released video/voice/image models each week, refreshes the model catalog and pricing, and surfaces new providers to add keys for as the market moves.
+- Footage-backed stills, download-all for the still set, manual brand-color override.

@@ -14,21 +14,21 @@ export const VIDEO_MODELS: Record<
 > = {
   "fal-ai/kling-video/v3/standard/text-to-video": {
     label: "Kling 3.0 (text→video)",
-    usdPerSec: 0.1,
+    usdPerSec: 0.05,
     supportsImageRef: false,
-    note: "Cheapest, reliable, needs no reference image. Best default.",
+    note: "Cheapest, reliable, needs no reference image. ~$0.05/s on fal.",
   },
   "fal-ai/kling-video/v2.1/pro/image-to-video": {
     label: "Kling 2.1 Pro (image→video)",
-    usdPerSec: 0.15,
+    usdPerSec: 0.1,
     supportsImageRef: true,
     note: "Animates a reference still to keep a character consistent across scenes.",
   },
   "fal-ai/veo3.1": {
-    label: "Veo 3.1 (text→video, native audio)",
-    usdPerSec: 0.4,
+    label: "Veo 3.1 (text→video)",
+    usdPerSec: 0.2,
     supportsImageRef: false,
-    note: "Highest quality with synced audio. Pricier ($0.40/s with audio).",
+    note: "Highest quality. $0.20/s as used here (audio off); $0.40/s with audio.",
   },
 };
 
@@ -38,10 +38,10 @@ export const IMAGE_MODELS: Record<ImageModelId, { label: string; usdPerImage: nu
 };
 
 // ElevenLabs is credit-based; this approximates the per-character cost on a paid tier.
-const VOICE_USD_PER_CHAR = 0.00018;
-const MUSIC_USD_PER_TRACK = 0.8; // ~one instrumental bed
+const VOICE_USD_PER_CHAR = 0.0002;
+const MUSIC_USD_PER_TRACK = 0.5; // ~one instrumental generation (credit-based, approx)
 // Claude ideation/planning — a rough envelope, not billed per scene.
-const LLM_FLAT_USD = 0.08;
+const LLM_FLAT_USD = 0.15;
 
 function clampDuration(sec: number) {
   return Math.max(2, Math.min(8, Math.round(sec)));
