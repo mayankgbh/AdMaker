@@ -7,9 +7,9 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    const { messages, mode } = await req.json();
     const keys = resolveKeys(req);
-    const reply = await ideate(messages ?? [], keys.anthropic);
+    const reply = await ideate(messages ?? [], keys.anthropic, mode === "script" ? "script" : "chat");
     return Response.json({ reply, mock: !keys.anthropic });
   } catch (e: any) {
     return jsonError(e?.message ?? "ideate failed");

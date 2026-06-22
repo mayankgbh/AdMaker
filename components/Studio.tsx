@@ -29,6 +29,7 @@ export default function Studio() {
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [script, setScript] = useState("");
+  const [writingScript, setWritingScript] = useState(false);
 
   // Storyboard
   const [aspect, setAspect] = useState<AspectRatio>("16:9");
@@ -66,6 +67,22 @@ export default function Studio() {
       setMessages([...next, { role: "assistant", content: `Error: ${e.message}` }]);
     } finally {
       setThinking(false);
+    }
+  }
+
+  async function writeScript() {
+    if (writingScript) return;
+    const convo = messages.length
+      ? messages
+      : [{ role: "user" as const, content: input.trim() || "Write me an ad." }];
+    setWritingScript(true);
+    try {
+      const { reply } = await api<{ reply: string }>("/api/ideate", { messages: convo, mode: "script" });
+      setScript(reply);
+    } catch (e: any) {
+      pushLog(`script error: ${e.message}`);
+    } finally {
+      setWritingScript(false);
     }
   }
 
@@ -219,6 +236,15 @@ export default function Studio() {
       {/* ---------------- IDEATE ---------------- */}
       {stage === "ideate" && (
         <div className="grid gap-5 md:grid-cols-[1fr_360px]">
+          {!keyed && (
+            <div className="md:col-span-2 -mt-1 mb-1 flex items-center gap-2 rounded-lg border border-marker/40 bg-marker/10 px-3 py-2 text-sm text-bone">
+              <Wand2 className="h-4 w-4 shrink-0 text-marker" />
+              No Anthropic key yet, so the creative director runs in mock mode and can't research or write.
+              <button onClick={() => setSettingsOpen(true)} className="ml-auto shrink-0 font-medium text-marker hover:underline">
+                Add key
+              </button>
+            </div>
+          )}
           <section className="panel flex h-[60vh] flex-col p-4">
             <p className="label mb-3">Creative director</p>
             <div className="flex-1 space-y-3 overflow-y-auto pr-1">
@@ -269,10 +295,20 @@ export default function Studio() {
           </section>
 
           <aside className="panel flex h-[60vh] flex-col p-4">
-            <p className="label mb-3">Locked script</p>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="label">Locked script</p>
+              <button
+                className="flex items-center gap-1 text-xs text-teal hover:underline disabled:opacity-40"
+                onClick={writeScript}
+                disabled={writingScript}
+              >
+                {writingScript ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                write full script
+              </button>
+            </div>
             <textarea
               className="input flex-1 resize-none font-mono text-[13px] leading-relaxed"
-              placeholder="Paste or edit your final script here, then plan the storyboard."
+              placeholder="Brainstorm on the left, then hit 'write full script' — or paste your own here."
               value={script}
               onChange={(e) => setScript(e.target.value)}
             />

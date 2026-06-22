@@ -12,11 +12,34 @@ function headers(key: string) {
   };
 }
 
-const CREATIVE_SYSTEM = `You are the creative director at a sharp, irreverent ad agency. The user is a founder or marketer with no video skills who wants a short ad (15-60s) that other marketers will actually stop and watch.
+const CREATIVE_SYSTEM = `You are the creative director at a sharp, irreverent ad agency, paired with a founder or marketer who has no time. Your bias is to PRODUCE, not interrogate.
 
-Be a real creative partner: push for one strong idea over five weak ones, find the human tension, write punchy. When they ask for a script, write it tight with clear visual direction. No corporate filler, no hedging, no em dashes. When the idea is good, say so and tell them to lock it. Keep replies conversational and short unless they ask for a full script.`;
+Rules:
+- If the user names a company or gives a URL, USE WEB SEARCH to learn what it does before replying. Never tell the user to look it up themselves, and never say you can't browse — you can.
+- Make confident assumptions about audience, tone, and angle. Ask AT MOST one question, and only if you genuinely cannot proceed. Default to deciding for them.
+- Move fast. In your first substantive reply, give the angle in a line or two AND a full draft script. Do not spread it across five turns of questions.
+- The moment the user signals go (a length, "do it", "whatever you think", "sure"), output the FINAL script immediately as scene-by-scene shot directions with VO. That is what they will lock.
+- Tight prose. No corporate filler, no hedging, no em dashes.`;
 
-export async function ideate(messages: ChatMessage[], key?: string): Promise<string> {
+const SCRIPT_SYSTEM = `Write the FINAL ad script as clean, scene-by-scene shot directions with voiceover. Pull product, audience, angle, and length from the conversation. If something essential is missing, make a smart assumption instead of asking. If a company or URL was mentioned and you lack detail, use web search to fill it in.
+
+Output ONLY the script. Format: a title line, then numbered scenes, each with a one-line visual direction and a "VO:" line. No preamble, no questions, no sign-off.`;
+
+const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 4 };
+
+function extractText(data: any): string {
+  return (data.content ?? [])
+    .filter((b: any) => b.type === "text")
+    .map((b: any) => b.text)
+    .join("\n")
+    .trim();
+}
+
+export async function ideate(
+  messages: ChatMessage[],
+  key?: string,
+  mode: "chat" | "script" = "chat"
+): Promise<string> {
   if (!key) {
     return mockIdeate(messages);
   }
@@ -25,18 +48,14 @@ export async function ideate(messages: ChatMessage[], key?: string): Promise<str
     headers: headers(key),
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 1200,
-      system: CREATIVE_SYSTEM,
+      max_tokens: 2000,
+      system: mode === "script" ? SCRIPT_SYSTEM : CREATIVE_SYSTEM,
+      tools: [WEB_SEARCH_TOOL],
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     }),
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return (data.content ?? [])
-    .filter((b: any) => b.type === "text")
-    .map((b: any) => b.text)
-    .join("\n")
-    .trim();
+  return extractText(await res.json());
 }
 
 const PLAN_SYSTEM = `You convert an approved ad script into a production storyboard as STRICT JSON. Rules that come from how real AI video models work in 2026 — follow them exactly:
@@ -85,14 +104,9 @@ export async function planStoryboard(
 }
 
 function mockIdeate(messages: ChatMessage[]): string {
-  const last = messages[messages.length - 1]?.content ?? "";
-  return `[mock mode — paste an Anthropic key in Settings for the real creative director]
+  return `Mock mode — I can't think or look anything up without an Anthropic key.
 
-Here's a direction for: "${last.slice(0, 80)}"
-
-Concept: make the villain the thing your audience secretly does. Open on it played straight, hold a beat too long, then turn. End on your product as the obvious way out.
-
-Tell me your product and audience and I'll write the full script. When you like it, hit Lock script.`;
+Open Settings, paste your Anthropic key, and I'll research your company, find the angle, and write the full script in one pass. Until then this is just a dry run of the interface.`;
 }
 
 // Shared: turn raw model JSON (or mock) into a clean Storyboard with safe defaults.
