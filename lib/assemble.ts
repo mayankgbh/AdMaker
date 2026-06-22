@@ -26,6 +26,8 @@ export interface AssembleInput {
   durations: Record<string, number | undefined>; // VO-driven effective duration per scene
   musicUrl?: string;
   theme?: Theme;
+  brandName?: string;
+  website?: string;
   onProgress?: (msg: string) => void;
 }
 
@@ -42,7 +44,7 @@ function pngFromCanvas(canvas: HTMLCanvasElement): Promise<Uint8Array> {
 }
 
 export async function assemble(input: AssembleInput): Promise<string> {
-  const { board, style, sceneMedia, voUrls, durations, musicUrl, theme, onProgress } = input;
+  const { board, style, sceneMedia, voUrls, durations, musicUrl, theme, brandName, website, onProgress } = input;
   const log = onProgress ?? (() => {});
   await ensureFonts();
   const ffmpeg = await getFFmpeg(log);
@@ -66,8 +68,10 @@ export async function assemble(input: AssembleInput): Promise<string> {
     const media = sceneMedia[scene.id];
     const frames = Math.max(1, Math.round(d * FPS));
 
+    const isLast = i === board.scenes.length - 1;
     const hasFootage = style === "stock" && media?.url && !media.mock;
     const hasClip = style === "ai_video" && media?.url && !media.mock;
+    const overlay = hasFootage || (hasClip && isLast); // last AI scene gets the end-card overlay
 
     let footageOK = false;
     if (hasFootage || hasClip) {
@@ -79,7 +83,7 @@ export async function assemble(input: AssembleInput): Promise<string> {
       }
     }
 
-    if (footageOK && hasClip) {
+    if (footageOK && hasClip && !isLast) {
       // AI video clip, no text overlay
       await ffmpeg.exec([
         "-stream_loop", "-1", "-i", `clip${i}`,
@@ -87,11 +91,11 @@ export async function assemble(input: AssembleInput): Promise<string> {
         "-vf", `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS}`,
         "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS), seg,
       ]);
-    } else if (footageOK && hasFootage) {
-      // Stock footage background + kinetic text overlay (transparent frames)
+    } else if (footageOK && overlay) {
+      // Footage/clip background + kinetic text overlay (transparent frames)
       log(`scene ${i + 1}: footage + text`);
       for (let f = 0; f < frames; f++) {
-        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1, overFootage: true, theme });
+        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast, overFootage: true, theme, brandName, website });
         await ffmpeg.writeFile(`t${i}_${String(f).padStart(4, "0")}.png`, await pngFromCanvas(canvas));
       }
       await ffmpeg.exec([
@@ -108,7 +112,7 @@ export async function assemble(input: AssembleInput): Promise<string> {
       // Designed motion (full art-directed background)
       log(`scene ${i + 1}: designed motion`);
       for (let f = 0; f < frames; f++) {
-        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast: i === board.scenes.length - 1, theme });
+        drawSceneFrame(ctx, scene, f, frames, w, h, { index: i, count: board.scenes.length, isLast, theme, brandName, website });
         await ffmpeg.writeFile(`f${i}_${String(f).padStart(4, "0")}.png`, await pngFromCanvas(canvas));
       }
       await ffmpeg.exec([
@@ -154,7 +158,7 @@ export async function assemble(input: AssembleInput): Promise<string> {
     await ffmpeg.writeFile("music.mp3", await fetchFile(musicUrl));
     await ffmpeg.exec([
       "-i", "video.mp4", "-i", "vo.mp3", "-i", "music.mp3",
-      "-filter_complex", "[2:a]volume=0.25[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=2[a]",
+      "-filter_complex", "[2:a]volume=0.32[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=2[a]",
       "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-shortest", "final.mp4",
     ]);
   } else {

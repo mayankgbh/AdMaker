@@ -47,6 +47,7 @@ export interface ModelChoice {
   videoModel: VideoModelId;
   imageModel: ImageModelId;
   voiceId: string;
+  voiceModel?: string;
   music: boolean;
 }
 

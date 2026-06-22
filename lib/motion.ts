@@ -140,7 +140,7 @@ export function drawSceneFrame(
   total: number,
   w: number,
   h: number,
-  opts: { index: number; count: number; isLast: boolean; overFootage?: boolean; theme?: Theme }
+  opts: { index: number; count: number; isLast: boolean; overFootage?: boolean; theme?: Theme; brandName?: string; website?: string }
 ) {
   const C = opts.theme || DEFAULT_THEME;
   const m = Math.round(w * 0.075);
@@ -159,6 +159,29 @@ export function drawSceneFrame(
     background(ctx, w, h, gp, C);
   }
   progress(ctx, p, w, h, m, C);
+
+  if (opts.isLast && (opts.brandName || opts.website)) {
+    const min = Math.min(w, h);
+    const fade = easeOut(clamp01((frame - FPS * 0.3) / (FPS * 0.7)));
+    if (fade > 0) {
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.textAlign = "center";
+      if (opts.brandName) {
+        ctx.font = `800 ${Math.round(min * 0.032)}px ${DISPLAY}`;
+        ctx.fillStyle = C.text;
+        ctx.fillText(opts.brandName, w / 2, h - m - min * 0.05);
+      }
+      if (opts.website) {
+        ctx.font = `500 ${Math.round(min * 0.02)}px ${MONO}`;
+        ctx.fillStyle = C.accent;
+        ctx.fillText(opts.website, w / 2, h - m - min * 0.018);
+      }
+      ctx.restore();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    }
+  }
 
   const tmpl = classify(scene, opts.isLast);
   const text = (scene.onScreenText || scene.voiceover || "").trim();

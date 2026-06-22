@@ -8,7 +8,7 @@ import Settings from "./Settings";
 import Filmstrip from "./Filmstrip";
 import { api, loadKeys, hasAnyKey } from "@/lib/client";
 import { estimateCost, fmtUsd, VIDEO_MODELS, IMAGE_MODELS } from "@/lib/pricing";
-import { VOICE_PRESETS } from "@/lib/providers/elevenlabs";
+import { VOICE_PRESETS, VOICE_MODELS } from "@/lib/providers/elevenlabs";
 import { assemble } from "@/lib/assemble";
 import { renderStill, STILL_SIZES, type StillConcept, type StillSize } from "@/lib/stills";
 import type { AspectRatio, BrandProfile, ChatMessage, ModelChoice, Scene, Storyboard, VideoModelId } from "@/lib/types";
@@ -48,6 +48,7 @@ export default function Studio() {
     videoModel: "fal-ai/kling-video/v3/standard/text-to-video",
     imageModel: "fal-ai/flux/dev",
     voiceId: VOICE_PRESETS[0].id,
+    voiceModel: VOICE_MODELS[0].id,
     music: true,
   });
   const [producing, setProducing] = useState(false);
@@ -257,7 +258,7 @@ export default function Studio() {
         }
         pushLog(`scene ${s.index + 1}: voiceover…`);
         try {
-          const r = await api<{ dataUrl: string; mock?: boolean }>("/api/generate/voice", { text: s.voiceover, voiceId: choice.voiceId });
+          const r = await api<{ dataUrl: string; mock?: boolean }>("/api/generate/voice", { text: s.voiceover, voiceId: choice.voiceId, modelId: choice.voiceModel });
           voUrls.current[s.id] = r.dataUrl;
           const d = await audioDuration(r.dataUrl);
           measuredDur.current[s.id] = d > 0.3 ? Math.round((d + 0.5) * 10) / 10 : s.durationSec;
@@ -297,6 +298,8 @@ export default function Studio() {
         board, style: choice.style, sceneMedia: sceneMedia.current, voUrls: voUrls.current,
         durations: measuredDur.current, musicUrl: musicUrl.current,
         theme: brand ? { ...brand.colors, muted: "#8B8275" } : undefined,
+        brandName: brand?.name || board.title.split(" ")[0],
+        website: siteDomain(),
         onProgress: pushLog,
       });
       setFinalUrl(url);
@@ -315,6 +318,17 @@ export default function Studio() {
       await runAssemble();
     } finally {
       setProducing(false);
+    }
+  }
+
+  function siteDomain(): string | undefined {
+    const raw = (brandUrl || "").trim();
+    if (!raw) return undefined;
+    try {
+      const u = new URL(/^https?:\/\//i.test(raw) ? raw : "https://" + raw);
+      return u.hostname.replace(/^www\./, "");
+    } catch {
+      return raw.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] || undefined;
     }
   }
 
@@ -697,6 +711,13 @@ export default function Studio() {
                 <select className="input" value={choice.voiceId} onChange={(e) => setChoice({ ...choice, voiceId: e.target.value })}>
                   {VOICE_PRESETS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>
+              </div>
+              <div>
+                <p className="label mb-2">Voice style</p>
+                <select className="input" value={choice.voiceModel} onChange={(e) => setChoice({ ...choice, voiceModel: e.target.value })}>
+                  {VOICE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+                <p className="mt-1 text-[11px] text-muted">Natural is calmer. Expressive is more dramatic.</p>
               </div>
               <div>
                 <p className="label mb-2">Reference still</p>
