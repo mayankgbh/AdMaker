@@ -66,7 +66,7 @@ export async function assemble(input: AssembleInput): Promise<string> {
     const frames = Math.max(1, Math.round(d * FPS));
 
     const hasFootage = style === "stock" && media?.url && !media.mock;
-    const hasClip = style === "ai_video" && scene.visualType === "ai_video" && media?.url && !media.mock;
+    const hasClip = style === "ai_video" && media?.url && !media.mock;
 
     let footageOK = false;
     if (hasFootage || hasClip) {

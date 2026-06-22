@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Sparkles, Clapperboard, Wallet, Clapperboard as Produce, Settings as Gear,
-  ArrowRight, Lock, Send, Loader2, Download, Play, Film, Type, MonitorPlay, Wand2,
+  ArrowRight, Lock, Send, Loader2, Download, Play, Film, Wand2,
 } from "lucide-react";
 import Settings from "./Settings";
 import Filmstrip from "./Filmstrip";
@@ -177,7 +177,6 @@ export default function Studio() {
       // 2. Video per ai_video scene — only when AI-video style is selected.
       if (choice.style === "ai_video") {
         for (const s of board.scenes) {
-          if (s.visualType !== "ai_video") continue;
           updateScene(s.id, { status: "running" });
           const videoPrompt =
             s.videoPrompt?.trim() ||
@@ -478,39 +477,25 @@ export default function Studio() {
             <div className="grid gap-5 md:grid-cols-2">
               <div className="panel p-4">
                 <p className="label mb-3">Scene {scene.index + 1}</p>
-                <div className="mb-3 flex gap-2">
-                  {(["ai_video", "designed_card", "screen_rec"] as const).map((t) => {
-                    const I = { ai_video: Film, designed_card: Type, screen_rec: MonitorPlay }[t];
-                    return (
-                      <button
-                        key={t}
-                        onClick={() => updateScene(scene.id, { visualType: t })}
-                        className={`btn flex-1 ${scene.visualType === t ? "bg-bone text-ink" : "border border-line text-muted"}`}
-                      >
-                        <I className="h-4 w-4" /> {t.replace("_", " ")}
-                      </button>
-                    );
-                  })}
-                </div>
-                {scene.visualType === "ai_video" ? (
-                  <textarea
-                    className="input mb-3 h-24 resize-none text-[13px]"
-                    value={scene.videoPrompt}
-                    onChange={(e) => updateScene(scene.id, { videoPrompt: e.target.value })}
-                    placeholder="Shot prompt"
-                  />
-                ) : scene.visualType === "designed_card" ? (
-                  <div className="mb-3 space-y-2">
-                    <input className="input" placeholder="Headline" value={scene.card?.headline ?? ""}
-                      onChange={(e) => updateScene(scene.id, { card: { ...scene.card, headline: e.target.value } })} />
-                    <input className="input" placeholder="Subtext" value={scene.card?.sub ?? ""}
-                      onChange={(e) => updateScene(scene.id, { card: { ...scene.card, sub: e.target.value } })} />
-                  </div>
-                ) : (
-                  <p className="mb-3 rounded-lg border border-dashed border-line p-3 text-sm text-muted">
-                    Drop in your own screen recording at assembly. A real product shot beats a generated one.
-                  </p>
-                )}
+
+                <label className="label">On-screen text</label>
+                <input
+                  className="input mb-1 mt-1"
+                  value={scene.onScreenText ?? ""}
+                  onChange={(e) => updateScene(scene.id, { onScreenText: e.target.value })}
+                  placeholder="The words shown on screen"
+                />
+                <p className="mb-3 text-[11px] text-muted">Wrap the punch word in *asterisks* to highlight it.</p>
+
+                <label className="label">Footage</label>
+                <input
+                  className="input mb-1 mt-1"
+                  value={scene.footageQuery ?? ""}
+                  onChange={(e) => updateScene(scene.id, { footageQuery: e.target.value })}
+                  placeholder="e.g. empty boardroom, city at night"
+                />
+                <p className="mb-3 text-[11px] text-muted">2-4 words of real b-roll pulled in Stock mode. The text sits on top of it.</p>
+
                 <label className="label">Voiceover</label>
                 <textarea
                   className="input mt-1 h-16 resize-none text-[13px]"
@@ -523,26 +508,17 @@ export default function Studio() {
                     onChange={(e) => updateScene(scene.id, { durationSec: Number(e.target.value) })} className="flex-1 accent-marker" />
                   <span className="font-mono text-sm text-bone">{scene.durationSec}s</span>
                 </div>
-                {scene.usesCharacterRef && (
-                  <p className="mt-3 flex items-center gap-1.5 text-xs text-teal">
-                    <Sparkles className="h-3 w-3" /> reuses the character still for continuity
-                  </p>
-                )}
+                <p className="mt-2 text-[11px] text-muted">Final cut length follows the voiceover.</p>
               </div>
 
               <div className="panel p-4">
-                <p className="label mb-3">Continuity</p>
-                {board.characterRef ? (
-                  <>
-                    <p className="text-sm text-bone">Recurring subject detected. One still gets generated and animated across flagged scenes.</p>
-                    <p className="mt-2 rounded-lg bg-ink/50 p-3 text-[13px] text-muted">{board.characterRef.description}</p>
-                    {!VIDEO_MODELS[choice.videoModel].supportsImageRef && (
-                      <p className="mt-2 text-xs text-marker">Your selected video model can't reuse a reference. Switch to an image→video model in Budget, or expect the look to drift between scenes.</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted">No recurring subject. Each scene stands alone, so model-to-model drift won't show.</p>
-                )}
+                <p className="label mb-3">How visuals work</p>
+                <p className="text-sm text-muted">
+                  In <span className="text-bone">Stock + text</span> mode (chosen in Budget), every scene pulls
+                  real footage matching its Footage term, with the on-screen text layered on top and the cut
+                  timed to the voiceover. In <span className="text-bone">Designed motion</span> mode, scenes
+                  render as kinetic typography instead. Footage is fetched at Produce and composited at Assemble.
+                </p>
                 <div className="mt-4">
                   <p className="label mb-1">Music bed</p>
                   <textarea
