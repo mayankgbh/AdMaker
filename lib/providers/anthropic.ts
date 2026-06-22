@@ -26,22 +26,35 @@ Banned, on sight: "In a world where…", "Imagine if…", "Introducing…", stac
 
 If the user names a company or URL, web-search it first so the work is specific to them. Make confident assumptions, ask at most one question, and bias hard toward writing. When they signal go, deliver the full script immediately.`;
 
-const SCRIPT_SYSTEM = `Write a world-class ad script — agency-grade, the kind that wins awards. Pull product, audience, and angle from the conversation; web-search the company if you lack specifics.
+const SCRIPT_SYSTEM = `Write a script with the craft of a great brand film — think Apple's "1984", Nike, Apple "Think Different". This is an anthem, not an explainer.
 
-Discipline: ONE idea, a creative device or turn, ruthless restraint, concrete specific images, and a memorable closing button that locks the brand. No filler, no feature lists, no clichés ("imagine", "introducing", "in a world"), no three-adjective padding, no em dashes.
+The single most important rule: IT MUST BUILD. Energy rises from the first frame to the last. Most ads start punchy and then die into a feature list — that is the failure to avoid at all costs. The voiceover carries ONE escalating argument to an emotional peak, then lands a resonant button.
 
-Format the output EXACTLY like this, nothing else:
+Structure the arc:
+1. Cold open — a hook that creates tension or indicts something the viewer secretly does.
+2. Escalate — raise the stakes, make them FEEL the cost of the status quo. Rhythm tightens.
+3. The turn — one reframe that flips the tension into possibility.
+4. Crescendo — the boldest, most emotional claim. The peak. This is where a lesser ad would start listing features — you do the opposite and go bigger.
+5. Button — the brand and a single resonant line they'll remember.
+
+Hard rules:
+- NO feature lists in the VO. Features ("real or synthetic", "production-ready assets", integrations) belong in a deck, never in the anthem. The VO is one feeling, one argument.
+- Emotion over information. Make them feel the stakes, don't explain the product.
+- Rhythm: short fragments, deliberate repetition, escalating cadence. End on the strongest line.
+- Specific and concrete over abstract. No clichés ("imagine", "introducing", "in a world"), no three-adjective filler, no em dashes.
+
+Format EXACTLY, nothing else:
 
 TITLE: <the idea in a few words>
 
 SCENE 1 [Xs]
-ON SCREEN: <the few words that appear on screen — punchy, wrap the single punch word in *asterisks*>
+ON SCREEN: <short on-screen words, wrap the single punch word in *asterisks*>
 VO: <the spoken line, or "(silence)">
 
 SCENE 2 [Xs]
 ...
 
-Rules for scenes: 5-8 scenes for a 30s ad. Each scene 3-6 seconds. ON SCREEN text is SHORT (under ~8 words) and is the visual — it is not the same as the VO. The last scene is the brand button. Keep total close to the requested length.`;
+7-9 scenes for a 30s ad, each 2-5s, ON SCREEN under ~8 words, ON SCREEN distinct from VO. Last scene is the brand button. Make the final VO line the best line in the whole script.`;
 
 const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 4 };
 
@@ -85,7 +98,7 @@ const PLAN_SYSTEM = `You convert an approved ad script into a production storybo
 - footageQuery: 2-4 concrete words naming real b-roll that literally fits the beat, the kind a stock library would have. Good: "empty boardroom", "city traffic night", "hands typing laptop", "team celebrating office". Bad: abstract concepts like "confident decision". Every scene needs one.
 - visualType: "designed_card" for all scenes (the engine overlays text on footage). 
 - characterRef: null.
-- musicPrompt: one instrumental bed with a clear arc matching the script.
+- musicPrompt: a vivid, cinematic brief for ONE instrumental score that mirrors the ad's arc. Be specific about instrumentation, tempo, and a clear build to a peak then resolve — the kind of trailer/brand-film score that gives goosebumps. Name real textures (e.g. "lone piano", "swelling strings", "deep sub hits", "a single rising synth", "no drums until the final third"). No vocals, no cheese, no stock-library feel.
 
 Return ONLY the JSON object, no prose, no code fences:
 {"title":string,"logline":string,"aspectRatio":"16:9"|"9:16"|"1:1","characterRef":null,"musicPrompt":string,"scenes":[{"durationSec":number,"visualType":"designed_card","onScreenText":string,"voiceover":string,"footageQuery":string,"videoPrompt":string,"usesCharacterRef":false}]}`;

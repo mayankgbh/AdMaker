@@ -545,7 +545,11 @@ export default function Studio() {
                 )}
                 <div className="mt-4">
                   <p className="label mb-1">Music bed</p>
-                  <p className="text-[13px] text-muted">{board.musicPrompt}</p>
+                  <textarea
+                    className="input h-28 resize-none text-[13px]"
+                    value={board.musicPrompt}
+                    onChange={(e) => setBoard({ ...board, musicPrompt: e.target.value })}
+                  />
                 </div>
               </div>
             </div>
