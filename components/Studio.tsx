@@ -87,19 +87,21 @@ export default function Studio() {
     }
   }
 
-  async function plan() {
-    if (!script.trim()) return;
+  async function plan(scriptText?: string) {
+    const src = (scriptText ?? script).trim();
+    if (!src) return;
+    if (scriptText) setScript(scriptText);
+    setStage("storyboard");
     setPlanning(true);
     setPlanError(undefined);
     try {
-      const { board } = await api<{ board: Storyboard }>("/api/plan", { script, aspectRatio: aspect });
+      const { board } = await api<{ board: Storyboard }>("/api/plan", { script: src, aspectRatio: aspect });
       if (!board?.scenes?.length) {
         setPlanError("The storyboard came back empty. Try again, or shorten the script a little.");
         return;
       }
       setBoard(board);
       setActiveScene(board.scenes[0]?.id);
-      setStage("storyboard");
     } catch (e: any) {
       setPlanError(e.message || "Planning failed. Check your Anthropic key in Settings.");
     } finally {
@@ -282,10 +284,10 @@ export default function Studio() {
                     {m.content}
                     {m.role === "assistant" && i === messages.length - 1 && (
                       <button
-                        onClick={() => { setScript(m.content); setStage("storyboard"); }}
+                        onClick={() => plan(m.content)}
                         className="mt-2 flex items-center gap-1 text-xs text-teal hover:underline"
                       >
-                        <Lock className="h-3 w-3" /> use as script
+                        <Lock className="h-3 w-3" /> use as script + plan
                       </button>
                     )}
                   </div>
@@ -331,7 +333,7 @@ export default function Studio() {
                 <option value="9:16">9:16</option>
                 <option value="1:1">1:1</option>
               </select>
-              <button className="btn-primary flex-1" onClick={plan} disabled={!script.trim() || planning}>
+              <button className="btn-primary flex-1" onClick={() => plan()} disabled={!script.trim() || planning}>
                 {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                 Plan storyboard
               </button>
@@ -342,6 +344,34 @@ export default function Studio() {
       )}
 
       {/* ---------------- STORYBOARD ---------------- */}
+      {stage === "storyboard" && !board && (
+        <div className="panel grid min-h-[40vh] place-items-center p-8 text-center">
+          {planning ? (
+            <div>
+              <Loader2 className="mx-auto mb-3 h-7 w-7 animate-spin text-teal" />
+              <p className="text-bone">Planning your storyboard…</p>
+              <p className="mt-1 text-sm text-muted">Splitting the script into model-sized scenes.</p>
+            </div>
+          ) : (
+            <div>
+              <Clapperboard className="mx-auto mb-3 h-7 w-7 text-marker" />
+              <p className="text-bone">{planError || "No storyboard yet."}</p>
+              <p className="mt-1 text-sm text-muted">
+                {script ? "Plan it from your locked script." : "Write a script first."}
+              </p>
+              <div className="mt-4 flex justify-center gap-2">
+                <button className="btn-ghost" onClick={() => setStage("ideate")}>Back to ideate</button>
+                {script && (
+                  <button className="btn-primary" onClick={() => plan()} disabled={planning}>
+                    <ArrowRight className="h-4 w-4" /> Plan storyboard
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {stage === "storyboard" && board && (
         <div className="space-y-5">
           <div className="panel p-4">

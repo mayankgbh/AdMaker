@@ -3,7 +3,7 @@ import { planStoryboard } from "@/lib/providers/anthropic";
 import { resolveKeys, jsonError } from "@/lib/route-utils";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   try {
