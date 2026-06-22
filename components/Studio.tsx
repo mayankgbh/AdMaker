@@ -160,8 +160,11 @@ export default function Studio() {
       for (const s of board.scenes) {
         if (s.visualType !== "ai_video") continue;
         updateScene(s.id, { status: "running" });
+        const videoPrompt =
+          s.videoPrompt?.trim() ||
+          `Cinematic, evocative shot illustrating: ${s.voiceover || s.onScreenText || board.title}. ${s.durationSec} seconds.`;
         const payload = {
-          model: choice.videoModel, prompt: s.videoPrompt, durationSec: s.durationSec,
+          model: choice.videoModel, prompt: videoPrompt, durationSec: s.durationSec,
           aspectRatio: board.aspectRatio, index: s.index,
           imageUrl: s.usesCharacterRef ? refUrl : undefined,
         };
