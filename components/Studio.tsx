@@ -125,14 +125,18 @@ export default function Studio() {
     const supportsRef = VIDEO_MODELS[choice.videoModel].supportsImageRef;
 
     try {
-      // 1. Reference still for continuity
+      // 1. Reference still for continuity (non-fatal if it fails)
       let refUrl: string | undefined;
       if (board.characterRef && supportsRef) {
         pushLog("generating character still…");
-        const r = await api<{ url: string }>("/api/generate/image", {
-          model: choice.imageModel, prompt: board.characterRef.description, aspectRatio: board.aspectRatio,
-        });
-        refUrl = r.url || undefined;
+        try {
+          const r = await api<{ url: string }>("/api/generate/image", {
+            model: choice.imageModel, prompt: board.characterRef.description, aspectRatio: board.aspectRatio,
+          });
+          refUrl = r.url || undefined;
+        } catch (e: any) {
+          pushLog(`character still failed (continuing without it): ${e.message}`);
+        }
       }
 
       // 2. Video per ai_video scene
@@ -148,26 +152,35 @@ export default function Studio() {
           });
           sceneMedia.current[s.id] = { url: r.url, mock: r.mock };
           updateScene(s.id, { status: "done", videoUrl: r.url || `mock:${s.index}` });
+          pushLog(`scene ${s.index + 1}: done`);
         } catch (e: any) {
           updateScene(s.id, { status: "error", error: e.message });
           pushLog(`scene ${s.index + 1} failed: ${e.message}`);
         }
       }
 
-      // 3. Voiceover per scene that has a line
+      // 3. Voiceover per scene that has a line (non-fatal per line)
       for (const s of board.scenes) {
         if (!s.voiceover?.trim()) continue;
         pushLog(`scene ${s.index + 1}: voiceover…`);
-        const r = await api<{ dataUrl: string }>("/api/generate/voice", { text: s.voiceover, voiceId: choice.voiceId });
-        voUrls.current[s.id] = r.dataUrl;
+        try {
+          const r = await api<{ dataUrl: string }>("/api/generate/voice", { text: s.voiceover, voiceId: choice.voiceId });
+          voUrls.current[s.id] = r.dataUrl;
+        } catch (e: any) {
+          pushLog(`scene ${s.index + 1} VO failed: ${e.message}`);
+        }
       }
 
-      // 4. Music bed sized to the whole ad
+      // 4. Music bed sized to the whole ad (non-fatal)
       if (choice.music && board.musicPrompt) {
         pushLog("music bed…");
-        const totalMs = board.scenes.reduce((n, s) => n + s.durationSec, 0) * 1000;
-        const r = await api<{ dataUrl: string }>("/api/generate/music", { prompt: board.musicPrompt, lengthMs: totalMs });
-        musicUrl.current = r.dataUrl;
+        try {
+          const totalMs = board.scenes.reduce((n, s) => n + s.durationSec, 0) * 1000;
+          const r = await api<{ dataUrl: string }>("/api/generate/music", { prompt: board.musicPrompt, lengthMs: totalMs });
+          musicUrl.current = r.dataUrl;
+        } catch (e: any) {
+          pushLog(`music failed (continuing without it): ${e.message}`);
+        }
       }
       pushLog("all assets ready. assemble when you are.");
     } catch (e: any) {

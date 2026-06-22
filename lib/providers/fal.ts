@@ -1,42 +1,36 @@
+import { createFalClient } from "@fal-ai/client";
 import type { AspectRatio, VideoModelId, ImageModelId } from "../types";
 import { mockVideo, mockImage } from "./mock";
 
-const QUEUE = "https://queue.fal.run";
-
-function auth(key: string) {
-  return { Authorization: `Key ${key}`, "content-type": "application/json" };
+// Different video models only accept specific clip lengths. Map our 2-8s scene
+// duration onto each model's allowed values so fal doesn't reject the request.
+function durationFor(model: VideoModelId, sec: number): string | number {
+  const s = Math.max(2, Math.min(8, Math.round(sec)));
+  if (model.includes("kling") || model.includes("seedance")) return s > 7 ? "10" : "5";
+  return s; // veo accepts a numeric range
 }
 
-function aspectToSize(ar: AspectRatio) {
-  // fal models vary; most accept an aspect_ratio string.
-  return ar;
+function imageSize(ar: AspectRatio) {
+  if (ar === "9:16") return "portrait_16_9";
+  if (ar === "1:1") return "square_hd";
+  return "landscape_16_9";
 }
 
-async function submitAndWait(model: string, input: any, key: string, timeoutMs = 240_000) {
-  const submit = await fetch(`${QUEUE}/${model}`, {
-    method: "POST",
-    headers: auth(key),
-    body: JSON.stringify(input),
-  });
-  if (!submit.ok) throw new Error(`fal submit ${submit.status}: ${await submit.text()}`);
-  const { request_id } = await submit.json();
-  const base = `${QUEUE}/${model.split("/").slice(0, 2).join("/")}/requests/${request_id}`;
-
-  const started = Date.now();
-  // Poll status until completed.
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    if (Date.now() - started > timeoutMs) throw new Error("fal timeout");
-    await new Promise((r) => setTimeout(r, 2500));
-    const st = await fetch(`${base}/status`, { headers: auth(key) });
-    if (!st.ok) continue;
-    const sj = await st.json();
-    if (sj.status === "COMPLETED") break;
-    if (sj.status === "FAILED") throw new Error("fal generation failed");
+function pickUrl(data: any, keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = k.split(".").reduce((o: any, p) => o?.[p], data);
+    if (typeof v === "string") return v;
   }
-  const result = await fetch(base, { headers: auth(key) });
-  if (!result.ok) throw new Error(`fal result ${result.status}`);
-  return result.json();
+  return data?.images?.[0]?.url ?? data?.videos?.[0]?.url;
+}
+
+function friendlyError(e: any): string {
+  // fal ValidationError carries a body with field-level detail — surface it.
+  const detail = e?.body?.detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => `${(d.loc || []).join(".")}: ${d.msg}`).join("; ");
+  }
+  return e?.message || "fal request failed";
 }
 
 export async function generateVideo(opts: {
@@ -44,23 +38,30 @@ export async function generateVideo(opts: {
   prompt: string;
   durationSec: number;
   aspectRatio: AspectRatio;
-  imageUrl?: string; // reference still for image→video models
+  imageUrl?: string;
   index: number;
   key?: string;
 }): Promise<{ url: string; mock?: boolean; prompt?: string; index?: number }> {
   if (!opts.key) return mockVideo(opts.prompt, opts.index);
+  const fal = createFalClient({ credentials: opts.key });
+
   const input: any = {
     prompt: opts.prompt,
-    duration: String(Math.max(2, Math.min(8, Math.round(opts.durationSec)))),
-    aspect_ratio: aspectToSize(opts.aspectRatio),
+    duration: durationFor(opts.model, opts.durationSec),
+    aspect_ratio: opts.aspectRatio,
   };
   if (opts.imageUrl && opts.model.includes("image-to-video")) {
     input.image_url = opts.imageUrl;
   }
-  const out = await submitAndWait(opts.model, input, opts.key);
-  const url = out?.video?.url ?? out?.videos?.[0]?.url ?? out?.url;
-  if (!url) throw new Error("fal returned no video url");
-  return { url };
+
+  try {
+    const { data } = await fal.subscribe(opts.model, { input });
+    const url = pickUrl(data, ["video.url", "url"]);
+    if (!url) throw new Error("fal returned no video url");
+    return { url };
+  } catch (e: any) {
+    throw new Error(friendlyError(e));
+  }
 }
 
 export async function generateImage(opts: {
@@ -70,12 +71,15 @@ export async function generateImage(opts: {
   key?: string;
 }): Promise<{ url: string; mock?: boolean; prompt?: string }> {
   if (!opts.key) return mockImage(opts.prompt);
-  const out = await submitAndWait(
-    opts.model,
-    { prompt: opts.prompt, image_size: opts.aspectRatio === "9:16" ? "portrait_16_9" : "landscape_16_9" },
-    opts.key
-  );
-  const url = out?.images?.[0]?.url ?? out?.image?.url;
-  if (!url) throw new Error("fal returned no image url");
-  return { url };
+  const fal = createFalClient({ credentials: opts.key });
+  try {
+    const { data } = await fal.subscribe(opts.model, {
+      input: { prompt: opts.prompt, image_size: imageSize(opts.aspectRatio), num_images: 1 },
+    });
+    const url = pickUrl(data, ["images.0.url", "image.url"]);
+    if (!url) throw new Error("fal returned no image url");
+    return { url };
+  } catch (e: any) {
+    throw new Error(friendlyError(e));
+  }
 }
