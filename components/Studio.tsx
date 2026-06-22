@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sparkles, Clapperboard, Wallet, Clapperboard as Produce, Settings as Gear,
   ArrowRight, Lock, Send, Loader2, Download, Play, Film, Type, MonitorPlay, Wand2,
@@ -71,7 +71,9 @@ export default function Studio() {
     }
   }
 
-  const keyed = hasAnyKey(loadKeys());
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const keyed = mounted && hasAnyKey(loadKeys());
   const pushLog = (s: string) => setLog((l) => [...l.slice(-40), s]);
   const addDebug = (
     scene: string,
