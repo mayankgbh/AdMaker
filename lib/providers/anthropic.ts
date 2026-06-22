@@ -283,3 +283,38 @@ export async function extractBrand(url: string, html: string, key?: string): Pro
   const m = raw.match(/\{[\s\S]*\}/);
   return m ? JSON.parse(m[0]) : null;
 }
+
+const STILLS_SYSTEM = `You write scroll-stopping static ad copy for paid social (Meta, LinkedIn, Reddit). Given a brand and its video ad script, produce 3 DISTINCT static ad concepts, each a different angle (e.g. provocation, proof/outcome, the reframe).
+
+Each concept:
+- headline: max ~8 words, sharp enough to stop a thumb. Wrap the single punch word in *asterisks*.
+- subhead: one short supporting line.
+- cta: 2-3 words (e.g. "Stop guessing", "See it free").
+
+No clichés, no em dashes, no three-adjective filler. Return ONLY a JSON array:
+[{"headline":string,"subhead":string,"cta":string}, ...]`;
+
+export async function stillCopy(brief: string, key?: string): Promise<any[]> {
+  if (!key) {
+    return [
+      { headline: "Stop *guessing* what your market wants.", subhead: "Primary research in hours, not weeks.", cta: "See it free" },
+      { headline: "Ten thousand buyers. *One* morning.", subhead: "Research-grade answers, on demand.", cta: "Start knowing" },
+      { headline: "Not opinions. *Proof.*", subhead: "Decide with evidence, not vibes.", cta: "Book a demo" },
+    ];
+  }
+  const res = await fetch(API, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1000,
+      system: STILLS_SYSTEM,
+      messages: [{ role: "user", content: brief }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const raw = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+  const m = raw.match(/\[[\s\S]*\]/);
+  return m ? JSON.parse(m[0]) : [];
+}

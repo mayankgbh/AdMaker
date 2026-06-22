@@ -10,6 +10,7 @@ import { api, loadKeys, hasAnyKey } from "@/lib/client";
 import { estimateCost, fmtUsd, VIDEO_MODELS, IMAGE_MODELS } from "@/lib/pricing";
 import { VOICE_PRESETS } from "@/lib/providers/elevenlabs";
 import { assemble } from "@/lib/assemble";
+import { renderStill, STILL_SIZES, type StillConcept, type StillSize } from "@/lib/stills";
 import type { AspectRatio, BrandProfile, ChatMessage, ModelChoice, Scene, Storyboard, VideoModelId } from "@/lib/types";
 
 type Stage = "ideate" | "storyboard" | "budget" | "produce";
@@ -56,6 +57,8 @@ export default function Studio() {
   >([]);
   const [showDebug, setShowDebug] = useState(true);
   const [finalUrl, setFinalUrl] = useState<string>();
+  const [stills, setStills] = useState<{ concept: StillConcept; imgs: { size: StillSize; url: string }[] }[]>([]);
+  const [stillsLoading, setStillsLoading] = useState(false);
   const sceneMedia = useRef<Record<string, { url: string; mock?: boolean }>>({});
   const voUrls = useRef<Record<string, string>>({});
   const measuredDur = useRef<Record<string, number>>({});
@@ -286,6 +289,33 @@ export default function Studio() {
       pushLog(`produce error: ${e.message}`);
     } finally {
       setProducing(false);
+    }
+  }
+
+  async function generateStills() {
+    if (!board || stillsLoading) return;
+    setStillsLoading(true);
+    try {
+      const brief =
+        `Brand: ${brand?.name || board.title}. ${brand?.what || board.logline}\n` +
+        `Audience: ${brand?.audience || "marketers"}\nTone: ${brand?.tone || ""}\n` +
+        `Video script beats:\n` + board.scenes.map((s) => s.onScreenText || s.voiceover).filter(Boolean).join(" / ");
+      const { concepts } = await api<{ concepts: StillConcept[] }>("/api/stills", { brief });
+      const theme = brand ? { ...brand.colors, muted: "#8B8275" } : undefined;
+      const brandName = brand?.name || board.title.split(" ")[0];
+      const out: { concept: StillConcept; imgs: { size: StillSize; url: string }[] }[] = [];
+      for (const c of (concepts || []).slice(0, 3)) {
+        const imgs: { size: StillSize; url: string }[] = [];
+        for (const size of STILL_SIZES) {
+          imgs.push({ size, url: await renderStill(c, theme, brandName, size) });
+        }
+        out.push({ concept: c, imgs });
+      }
+      setStills(out);
+    } catch (e: any) {
+      pushLog(`stills error: ${e.message}`);
+    } finally {
+      setStillsLoading(false);
     }
   }
 
@@ -793,6 +823,45 @@ export default function Studio() {
                 </div>
               )}
             </aside>
+          </div>
+
+          <div className="panel p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="label">Still creatives</p>
+                <p className="mt-1 text-xs text-muted">Agency-style static ads in your brand, sized for each platform.</p>
+              </div>
+              <button className="btn-primary" onClick={generateStills} disabled={stillsLoading}>
+                {stillsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                Generate stills
+              </button>
+            </div>
+            {stills.length === 0 ? (
+              <div className="grid place-items-center rounded-lg border border-dashed border-line py-8 text-sm text-muted">
+                {stillsLoading ? "Writing copy and rendering…" : "Generate a set of static ads to run alongside the video."}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {stills.map((group, gi) => (
+                  <div key={gi}>
+                    <p className="mb-2 font-display text-bone">{group.concept.headline.replace(/\*/g, "")}</p>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                      {group.imgs.map((im, ii) => (
+                        <div key={ii} className="rounded-lg border border-line bg-ink/40 p-2">
+                          <img src={im.url} alt="" className="w-full rounded" />
+                          <div className="mt-1.5 flex items-center justify-between">
+                            <span className="text-[10px] text-muted">{im.size.platform}</span>
+                            <a href={im.url} download={`${group.concept.cta || "ad"}-${im.size.id}.png`} className="flex items-center gap-1 text-[11px] text-teal hover:underline">
+                              <Download className="h-3 w-3" /> {im.size.label}
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
